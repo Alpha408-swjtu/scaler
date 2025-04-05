@@ -22,6 +22,10 @@ func monitor(client *kubernetes.Clientset, appName, namespace string) (int, int,
 // 计算出微服务的期望副本数，并生成扩缩容决策
 func analyse(appName string, desiredReplicas int, currentReplicas int, currentQPS float64, targetQPS float64, minReplicas int) (string, int) {
 	// 计算期望副本数
+	if desiredReplicas != currentReplicas {
+		log.Logger.Warnf("目标副本和就绪副本不一致!")
+	}
+
 	desiredReplica := int(math.Ceil(currentQPS / targetQPS))
 	if desiredReplica < minReplicas {
 		desiredReplica = minReplicas

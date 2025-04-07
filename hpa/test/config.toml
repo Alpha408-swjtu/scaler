@@ -1,0 +1,88 @@
+[file]
+configPath = "D:/01upgrade/scaler/kubeConfig"
+
+[root]
+rootPath = "D:/01upgrade/scaler"
+
+[coldup]
+COOLDOWN_UP = 60
+
+[coldown]
+COOLDOWN_DOWN = 180 
+
+[url]
+prometheusUrl = "http://192.168.32.150:30090"
+
+[apps]
+appNames = [
+  "adservice",
+  "cartservice",
+  "checkoutservice",
+  "currencyservice",
+  "emailservice",
+  "frontend",
+  "paymentservice",
+  "productcatalogservice",
+  "recommendationservice",
+  "shippingservice"
+]
+
+[parameters.adservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 200
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.cartservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 200
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.checkoutservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.currencyservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.emailservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.frontend]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.paymentservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.productcatalogservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.recommendationservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5
+
+[parameters.shippingservice]
+DEFAULT_MIN_REPLICAS = 1
+DEFAULT_CPU_REQUEST = 100
+TARGET_QPS = 50
+MAX_REPLICAS = 5

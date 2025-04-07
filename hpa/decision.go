@@ -41,7 +41,7 @@ func analyse(appName string, desiredReplicas int, currentReplicas int, currentQP
 	} else {
 		scalingAction = "不变"
 	}
-	log.Logger.Debugf("%s的伸缩策略: %s", appName, scalingAction)
+	log.Logger.Debugf("%s的伸缩策略: %s\n", appName, scalingAction)
 
 	return scalingAction, desiredReplica
 }

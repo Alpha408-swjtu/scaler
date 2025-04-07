@@ -2,6 +2,8 @@ package config
 
 import (
 	"github.com/spf13/viper"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // 存储的全局变量
@@ -20,6 +22,8 @@ var (
 	Apps []string
 	//微服务应用的默认设置
 	Parameters map[string]Parameter
+
+	Client *kubernetes.Clientset
 )
 
 type Config struct {
@@ -85,4 +89,15 @@ func init() {
 	PrometheusUrl = config.Url.PrometheusUrl
 	Apps = config.Apps.AppNames
 	Parameters = config.Parameters
+
+	kubeconfig, err := clientcmd.BuildConfigFromFlags("", FilePath)
+	if err != nil {
+		panic(err)
+	}
+	client, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		panic(err)
+	}
+
+	Client = client
 }

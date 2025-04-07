@@ -41,6 +41,6 @@ func getDesiredReplicas(client *kubernetes.Clientset, appName, namespace string)
 	}
 
 	desiredReplicas := deployment.Spec.Replicas
-	mylog.LogEntry.Logger.Infof("deployment:%s的期望副本数为:%v", appName, *desiredReplicas)
+	mylog.LogEntry.Logger.Infof("deployment:%s的正确副本数为:%v", appName, *desiredReplicas)
 	return int(*desiredReplicas)
 }

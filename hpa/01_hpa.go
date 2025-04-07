@@ -4,6 +4,7 @@ import (
 	"context"
 	"scaler/log"
 
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -32,14 +33,21 @@ type AppInfo struct {
 }
 
 type Hpa struct {
-	Client   *kubernetes.Clientset
-	AppInfo  AppInfo
-	Standard Standards
+	Client     *kubernetes.Clientset
+	Deployment *appsv1.Deployment
+	AppInfo    AppInfo
+	Standard   Standards
 }
 
 func NewHpa(client *kubernetes.Clientset, namespace, appName string) *Hpa {
+	deploy, err := client.AppsV1().Deployments(namespace).Get(context.Background(), appName, metav1.GetOptions{})
+	if err != nil {
+		log.Logger.Panicf("获取deployment失败:%v", err)
+	}
+
 	return &Hpa{
-		Client: client,
+		Client:     client,
+		Deployment: deploy,
 		AppInfo: AppInfo{
 			Namespace: namespace,
 			AppName:   appName,
@@ -67,14 +75,8 @@ func (h *Hpa) MicroData(testTime int) MicroserviceData {
 }
 
 func (h *Hpa) Scale(desiredReplicas int) error {
-	deployment, err := h.Client.AppsV1().Deployments(h.AppInfo.Namespace).Get(context.TODO(), h.AppInfo.AppName, metav1.GetOptions{})
-	if err != nil {
-		log.Logger.Errorf("获取deploy:%s失败:%v", h.AppInfo.AppName, err)
-		return err
-	}
-	*deployment.Spec.Replicas = int32(desiredReplicas)
-	if _, err := h.Client.AppsV1().Deployments(h.AppInfo.Namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{}); err != nil {
-		log.Logger.Errorf("更新deploy:%s失败%v", h.AppInfo.AppName, err)
+	*h.Deployment.Spec.Replicas = int32(desiredReplicas)
+	if _, err := h.Client.AppsV1().Deployments(h.AppInfo.Namespace).Update(context.TODO(), h.Deployment, metav1.UpdateOptions{}); err != nil {
 		return err
 	}
 	return nil

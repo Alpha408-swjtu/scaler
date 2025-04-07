@@ -13,6 +13,6 @@ func TestHpa(t *testing.T) {
 }
 
 func TestExececuter(t *testing.T) {
-	s := hpa.NewExecuterTmp(config.Client, "boutique", config.Apps, 20)
+	s := hpa.NewExecuter(config.Client, "boutique", config.Apps, 20)
 	fmt.Println(s.DataMp)
 }

@@ -62,7 +62,7 @@ func main() {
 		testTime := int(time.Since(startTime).Seconds())
 		log.LogEntry.Infof("在%d秒执行操作", testTime)
 
-		hpaExecuter := hpa.NewExecuterTmp(config.Client, "boutique", config.Apps, testTime)
+		hpaExecuter := hpa.NewExecuter(config.Client, "boutique", config.Apps, testTime)
 		hpaExecuter.ExecuteAndSave()
 
 		fmt.Println("本轮操作完成-----------------------------------------------------------------------------------------------")

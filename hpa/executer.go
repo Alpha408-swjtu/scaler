@@ -5,6 +5,7 @@ import (
 	"os"
 	"scaler/config"
 	"scaler/log"
+	"sync"
 
 	"github.com/xuri/excelize/v2"
 	"k8s.io/client-go/kubernetes"
@@ -14,9 +15,10 @@ type HpaExecuter struct {
 	TestTime int
 	HpaSlice []*Hpa
 	DataMp   map[string]MicroserviceData
+	lock     sync.RWMutex
 }
 
-func NewExecuterTmp(client *kubernetes.Clientset, namespace string, appNames []string, testTime int) *HpaExecuter {
+func NewExecuter(client *kubernetes.Clientset, namespace string, appNames []string, testTime int) *HpaExecuter {
 	if len(appNames) <= 0 {
 		log.Logger.Panicln("待操作的微服务数量有误!")
 	}
@@ -36,22 +38,37 @@ func NewExecuterTmp(client *kubernetes.Clientset, namespace string, appNames []s
 		TestTime: testTime,
 		HpaSlice: hpaSlice,
 		DataMp:   dataMp,
+		lock:     sync.RWMutex{},
 	}
 }
 
-func (ht *HpaExecuter) ExecuteAndSave() {
-	for _, hpa := range ht.HpaSlice {
-		if data, ok := ht.DataMp[hpa.AppInfo.AppName]; ok {
-			saveDataFile(data, ht.TestTime)
+// 并发执行操作，保存文件
+func (he *HpaExecuter) ExecuteAndSave() {
+	wg := sync.WaitGroup{}
+	wg.Add(len(he.HpaSlice))
+	for _, hpa := range he.HpaSlice {
+		go func() {
+			defer wg.Done()
+			//加读锁
+			he.lock.RLock()
+			data, ok := he.DataMp[hpa.AppInfo.AppName]
+			//解锁
+			he.lock.RUnlock()
+			if !ok {
+				return
+			}
+			saveDataFile(data, he.TestTime)
 
 			if data.ScalingAction != "不变" {
+				he.lock.Lock()
+				defer he.lock.Unlock()
 				hpa.Scale(data.DesiredReplicas)
-			} else {
-				continue
 			}
-		}
-		log.Logger.Infof("应用:%s操作执行完毕\n", hpa.AppInfo.AppName)
+
+			log.Logger.Infof("应用:%s操作执行完毕", hpa.AppInfo.AppName)
+		}()
 	}
+	wg.Wait()
 }
 
 // 保存应用hpa信息数据到本地文件

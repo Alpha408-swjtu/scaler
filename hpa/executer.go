@@ -12,11 +12,17 @@ import (
 )
 
 type HpaExecuter struct {
-	TestTime int
-	HpaSlice []*Hpa
-	DataMp   map[string]MicroserviceData
-	lock     sync.RWMutex
+	TestTime     int
+	HpaSlice     []*Hpa
+	DataMp       map[string]MicroserviceData
+	HpaAlgorithm hpaAlgorithm
+	lock         sync.RWMutex
 }
+
+type hpaAlgorithm interface {
+	a(int) int
+}
+
 
 func NewExecuter(client *kubernetes.Clientset, namespace string, appNames []string, testTime int) *HpaExecuter {
 	if len(appNames) <= 0 {
@@ -59,7 +65,8 @@ func (he *HpaExecuter) ExecuteAndSave() {
 			}
 			saveDataFile(data, he.TestTime)
 
-			if data.ScalingAction != "不变" {
+			//判断是否需要执行伸缩操作
+			if data.CurrentReplicas != data.DesiredReplicas {
 				he.lock.Lock()
 				defer he.lock.Unlock()
 				hpa.Scale(data.DesiredReplicas)

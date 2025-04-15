@@ -10,21 +10,24 @@ import (
 )
 
 type MicroserviceData struct {
-	AppName         string // 微服务名称
-	ScalingAction   string // 伸缩决策
-	DesiredReplicas int    // 期望副本数
-	CurrentReplicas int    // 当前副本数
-	//CPURequest      float64 // CPU 请求
-	MaxReplicas int // 最大副本数决策
-	CurrentQPS  float64
-	//CpuPercentage   float64 //cpu使用率
+	AppName            string // 微服务名称
+	ScalingAction      string // 伸缩决策
+	DesiredReplicas    int    // 期望副本数
+	CurrentReplicas    int    // 当前副本数
+	MaxReplicas        int    // 最大副本数决策
+	CurrentQPS         float64
+	CurrentRecived     float64
+	CurrentTransmitted float64
+	CurrentReadIops    float64
+	CurrentWrightIops  float64
 }
 
 type Standards struct {
 	QPS         float64 //连接数
 	Recived     float64 //入口带宽
 	Transmitted float64 //出口带宽
-	Iops        float64 //磁盘读写
+	ReadIops    float64 //磁盘读取
+	WriteIops   float64 //磁盘写入
 }
 
 type AppInfo struct {
@@ -55,8 +58,9 @@ func NewHpa(client *kubernetes.Clientset, namespace, appName string) *Hpa {
 		Standard: Standards{
 			QPS:         getQuery(appName, namespace, qpsQuery),
 			Recived:     getQuery(appName, namespace, receivedQuery),
-			Transmitted: getQuery(appName, namespace, transmittedQuery),
-			Iops:        0,
+			Transmitted: getQuery(appName, namespace, TransmittedQuery),
+			ReadIops:    getQuery(appName, namespace, readQuery),
+			WriteIops:   getQuery(appName, namespace, writeQuery),
 		},
 	}
 }
@@ -65,12 +69,16 @@ func (h *Hpa) MicroData(testTime int) MicroserviceData {
 	desiredReplicas, currentReplicas, parameter := monitor(h.Client, h.AppInfo.AppName, h.AppInfo.Namespace)
 	scalingAction, desiredReplica := analyse(h.AppInfo.AppName, desiredReplicas, currentReplicas, h.Standard.QPS, parameter.TARGET_QPS, parameter.DEFAULT_MIN_REPLICAS)
 	return MicroserviceData{
-		AppName:         h.AppInfo.AppName,
-		ScalingAction:   scalingAction,
-		DesiredReplicas: desiredReplica,
-		CurrentReplicas: currentReplicas,
-		MaxReplicas:     parameter.MAX_REPLICAS,
-		CurrentQPS:      h.Standard.QPS,
+		AppName:            h.AppInfo.AppName,
+		ScalingAction:      scalingAction,
+		DesiredReplicas:    desiredReplica,
+		CurrentReplicas:    currentReplicas,
+		MaxReplicas:        parameter.MAX_REPLICAS,
+		CurrentQPS:         h.Standard.QPS,
+		CurrentRecived:     h.Standard.Recived,
+		CurrentTransmitted: h.Standard.Transmitted,
+		CurrentReadIops:    h.Standard.ReadIops,
+		CurrentWrightIops:  h.Standard.WriteIops,
 	}
 }
 

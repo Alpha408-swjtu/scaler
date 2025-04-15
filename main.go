@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"scaler/config"
 	"scaler/hpa"
-	"scaler/log"
 	"time"
 )
 
@@ -53,19 +52,22 @@ func clearDir() {
 }
 
 func main() {
-	clearDir()
+	// clearDir()
 
-	desiredTime := 196400 //运行时间
-	startTime := time.Now()
+	// desiredTime := 196400 //运行时间
+	// startTime := time.Now()
 
-	for time.Since(startTime) < time.Duration(desiredTime)*time.Second {
-		testTime := int(time.Since(startTime).Seconds())
-		log.LogEntry.Infof("在%d秒执行操作", testTime)
+	// for time.Since(startTime) < time.Duration(desiredTime)*time.Second {
+	// 	testTime := int(time.Since(startTime).Seconds())
+	// 	log.LogEntry.Infof("在%d秒执行操作", testTime)
 
-		hpaExecuter := hpa.NewExecuter(config.Client, "boutique", config.Apps, testTime)
-		hpaExecuter.ExecuteAndSave()
+	// 	hpaExecuter := hpa.NewExecuter(config.Client, "boutique", config.Apps, testTime)
+	// 	hpaExecuter.ExecuteAndSave()
 
-		fmt.Println("本轮操作完成-----------------------------------------------------------------------------------------------")
-		time.Sleep(30 * time.Second)
-	}
+	// 	fmt.Println("本轮操作完成-----------------------------------------------------------------------------------------------")
+	// 	time.Sleep(30 * time.Second)
+	// }
+
+	S := hpa.GetQps("frontend", "boutique", hpa.TransmittedQuery)
+	fmt.Println(S)
 }

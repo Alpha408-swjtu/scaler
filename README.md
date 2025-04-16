@@ -20,52 +20,106 @@
 
 ```go
 var (
-	qpsQuery         = `sum(rate(istio_requests_total{destination_workload_namespace="%s", destination_workload="%s"}[1m]))`
-	receivedQuery    = `sum(rate(container_network_receive_bytes_total{namespace="%s", pod=~"%s-.*"}[1m]))/1024`
-	TransmittedQuery = `sum(rate(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"}[1m]))/1024`
-	readQuery        = `sum(rate(container_fs_reads_bytes_total{namespace="%s", pod=~"%s-.*", container!="POD"}[1m]))`
-	writeQuery       = `sum(rate(container_fs_writes_bytes_total{namespace='%s', pod=~'%s-.*', container!='POD'}[1m]))`
+	qpsQuery         = `sum(rate(istio_requests_total{destination_workload_namespace="%s", destination_workload="%s"}[1m]) offset %ds)`
+	receivedQuery    = `sum(rate(container_network_receive_bytes_total{namespace="%s", pod=~"%s-.*"}[1m]) offset %ds)/1024`
+	TransmittedQuery = `sum(rate(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"}[1m])offset %ds)/1024`
+	readQuery        = `sum(rate(container_fs_reads_bytes_total{namespace="%s", pod=~"%s-.*", container!="POD"}[1m]) offset %ds)`
+	writeQuery       = `sum(rate(container_fs_writes_bytes_total{namespace='%s', pod=~'%s-.*', container!='POD'}[1m]) offset %ds)`
 )
 ```
 
-每10s采集一次，1m为一个预测周期，即每次预测1m内的数据,避免采集过于频繁增大Prometheus pod的压力
+获取历史数据，设预测1m后的数据，则在此时采集过去1m的历史数据序列,平均1获取一次
+
+```go
+// 获取普罗米修斯的历史数据
+func getHistoryMetrics(query, appName, namespace string, duration int, step int) []float64 {
+	if duration%step != 0 {
+		panic("参数非法")
+	}
+	result := make([]float64, 0, duration/step)
+	for i := step; i < duration; i += step {
+		queryParams := url.Values{}
+		queryParams.Add("query", fmt.Sprintf(query, namespace, appName, i))
+		baseURL := config.PrometheusUrl + "/api/v1/query"
+		url := baseURL + "?" + queryParams.Encode()
+	    ......
+		result = append(result, data)
+		}
+	}
+	return result
+}
+```
+
+
 
 #### 2.基于二次移动平均法(DMA)预测
 
 ![02](./images/02.png)
 
-代码中，n为窗口大小，T为预测未来T个周期(10s)内的数据大小。
+代码中，n为窗口大小，T为预测未来T个周期(60s)内的数据大小。
 
 ```go
-// singleMovingAverage 计算一次移动平均值
-func singleMovingAverage(data []float64, n int) []float64 {
-	result := make([]float64, len(data))
-	for i := n - 1; i < len(data); i++ {
-		sum := 0.0
-		for j := 0; j < n; j++ {
-			sum += data[i-j]
-		}
-		result[i] = sum / float64(n)
+// 一次移动的平均值
+func MovingAverage(data []float64) float64 {
+	sum := float64(0)
+	for _, v := range data {
+		sum += v
 	}
+	return sum / float64(len(data))
+}
+
+// 一次移动后的时间序列
+func FirstMovingSequence(data []float64) []float64 {
+	n := len(data)
+	if n == 0 {
+		return []float64{}
+	}
+
+	result := make([]float64, n)
+	sum := float64(0)
+
+	// 从数组末尾开始计算
+	for i := n - 1; i >= 0; i-- {
+		sum += data[i]
+		result[i] = sum / float64(n-i)
+	}
+
 	return result
 }
 
-// doubleMovingAverage 计算二次移动平均值
-func doubleMovingAverage(data []float64, n int) []float64 {
-	singleMA := singleMovingAverage(data, n)
-	return singleMovingAverage(singleMA, n)
-}
-
-// predict 进行预测
-func predict(data []float64, n int, T int) float64 {
-	singleMA := singleMovingAverage(data, n)
-	doubleMA := doubleMovingAverage(data, n)
-	t := len(data) - 1
-	a := 2*singleMA[t] - doubleMA[t]
-	b := (2 / float64(n-1)) * (singleMA[t] - doubleMA[t])
+// 预测负载
+func PreditLoad(datas []float64, T int) float64 {
+	m1 := MovingAverage(datas)
+	firstDatas := FirstMovingSequence(datas)
+	m2 := MovingAverage(firstDatas)
+	a := 2*m1 - m2
+	b := 2 * (m1 - m2) / float64(len(datas)-1)
 	return a + b*float64(T)
 }
 ```
+
+预测结果
+
+```go
+func main() {
+	timer := time.After(59 * time.Second)
+	fmt.Println(time.Now())
+	s := hpa.GetHistoryMetrics(hpa.QpsQuery, "frontend", "boutique", 60, 1)
+	fmt.Printf("原始时间序列为：%v\n", s)
+	
+    //得到预期负载
+	a := hpa.PreditLoad(s, 60)
+	fmt.Printf("预测1m后的负载为:%v\n", a)
+
+    //一分钟后获取真是负载
+	<-timer
+	f := hpa.GetQuery("frontend", "boutique", hpa.CurrentQps)
+	fmt.Printf("一分钟后的实际负载是:%v", f)
+
+}
+```
+
+![09](D:\01upgrade\scaler\images\09.png)
 
 #### 3.动态阈值调整
 
@@ -112,4 +166,6 @@ func calculateDynamicThreshold(fx, historicalAvg, loadGrowthRate float64) (float
 
 ​                                                                                                              qps情况
 
-2.多重指标加入算法的改进策略，综合得到期望副本数。
+2.多重指标加入算法的改进策略，综合得到期望副本数
+
+3.二次平移法仅考虑平均数，未考虑上升下降的趋势，不是太准。复现一下指数平滑法。

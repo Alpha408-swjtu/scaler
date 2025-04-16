@@ -6,6 +6,6 @@ import (
 )
 
 func TestHpa(t *testing.T) {
-	s := getHistoryMetrics(TransmittedQuery, "frontend", "boutique", 60, 1)
-	fmt.Println(s)
+	f := GetQuery("frontend", "boutique", CurrentTransmittedQuery)
+	fmt.Println(f)
 }

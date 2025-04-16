@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"scaler/config"
+	"scaler/hpa"
 	"time"
 )
 
@@ -51,9 +52,16 @@ func clearDir() {
 }
 
 func main() {
-	// s, e := hpa.GetHistoricalMetrics(hpa.QpsQuery, "frontend", "boutique", 100*time.Second, 10*time.Second)
-	// if e != nil {
-	// 	fmt.Println(e)
-	// }
-	// fmt.Println(s)
+	timer := time.After(59 * time.Second)
+	fmt.Println(time.Now())
+	s := hpa.GetHistoryMetrics(hpa.TransmittedQuery, "frontend", "boutique", 60, 1)
+	fmt.Printf("原始时间序列为：%v\n", s)
+
+	a := hpa.PreditLoad(s, 60)
+	fmt.Printf("预测1m后的负载为:%v\n", a)
+
+	<-timer
+	f := hpa.GetQuery("frontend", "boutique", hpa.CurrentTransmittedQuery)
+	fmt.Printf("一分钟后的实际负载是:%v", f)
+
 }

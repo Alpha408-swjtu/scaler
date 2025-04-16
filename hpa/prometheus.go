@@ -12,12 +12,14 @@ import (
 )
 
 var (
-	QpsQuery      = `sum(rate(istio_requests_total{destination_workload_namespace="%s", destination_workload="%s"}[20s]))`
+	QpsQuery      = `sum(rate(istio_requests_total{destination_workload_namespace="%s", destination_workload="%s"} [1m] offset %ds))`
+	CurrentQps    = `sum(rate(istio_requests_total{destination_workload_namespace="%s", destination_workload="%s"} [1m] ))`
 	receivedQuery = `sum(rate(container_network_receive_bytes_total{namespace="%s", pod=~"%s-.*"}[100s]))/1024`
 	//TransmittedQuery = `sum(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"})/1024/1024`
-	TransmittedQuery = `sum(rate(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"}[1m] offset %ds))/1024`
-	readQuery        = `sum(rate(container_fs_reads_bytes_total{namespace="%s", pod=~"%s-.*", container!="POD"}[100s]))`
-	writeQuery       = `sum(rate(container_fs_writes_bytes_total{namespace='%s', pod=~'%s-.*', container!='POD'}[100s]))`
+	CurrentTransmittedQuery = `sum(rate(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"}[1m] ))/1024`
+	TransmittedQuery        = `sum(rate(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"}[1m] offset %ds))/1024`
+	readQuery               = `sum(rate(container_fs_reads_bytes_total{namespace="%s", pod=~"%s-.*", container!="POD"}[100s]))`
+	writeQuery              = `sum(rate(container_fs_writes_bytes_total{namespace='%s', pod=~'%s-.*', container!='POD'}[100s]))`
 )
 
 type Data struct {
@@ -63,7 +65,6 @@ func GetQuery(appName, namespace, query string) float64 {
 		if err != nil {
 			fmt.Println("获取指标有误:", err)
 		}
-		fmt.Printf("获取到的指标:%v\n", a)
 		return a
 	}
 
@@ -71,7 +72,7 @@ func GetQuery(appName, namespace, query string) float64 {
 }
 
 // 获取普罗米修斯的历史数据
-func getHistoryMetrics(query, appName, namespace string, duration int, step int) []float64 {
+func GetHistoryMetrics(query, appName, namespace string, duration int, step int) []float64 {
 	if duration%step != 0 {
 		panic("参数非法")
 	}
@@ -83,8 +84,6 @@ func getHistoryMetrics(query, appName, namespace string, duration int, step int)
 		queryParams.Add("query", fmt.Sprintf(query, namespace, appName, i))
 		baseURL := config.PrometheusUrl + "/api/v1/query"
 		url := baseURL + "?" + queryParams.Encode()
-
-		//fmt.Println(url)
 
 		resp, err := http.Get(url)
 		if err != nil {
@@ -110,11 +109,10 @@ func getHistoryMetrics(query, appName, namespace string, duration int, step int)
 			if err != nil {
 				fmt.Println("获取指标有误:", err)
 			}
-			fmt.Printf("时间:%v之前获取到的指标:%v\n", i, a)
+			//fmt.Printf("时间:%v之前获取到的指标:%v\n", i, a)
 			result = append(result, a)
 		}
 
 	}
-
 	return result
 }

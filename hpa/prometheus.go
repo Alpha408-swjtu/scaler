@@ -9,15 +9,13 @@ import (
 	"scaler/config"
 	mylog "scaler/log"
 	"strconv"
-	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 var (
-	qpsQuery         = `sum(rate(istio_requests_total{destination_workload_namespace="%s", destination_workload="%s"}[20s]))`
-	receivedQuery    = `sum(rate(container_network_receive_bytes_total{namespace="%s", pod=~"%s-.*"}[100s]))/1024`
-	TransmittedQuery = `sum(rate(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"}[100s]))/1024`
+	QpsQuery      = `sum(rate(istio_requests_total{destination_workload_namespace="%s", destination_workload="%s"}[20s]))`
+	receivedQuery = `sum(rate(container_network_receive_bytes_total{namespace="%s", pod=~"%s-.*"}[100s]))/1024`
+	//TransmittedQuery = `sum(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"})/1024/1024`
+	TransmittedQuery = `sum(rate(container_network_transmit_bytes_total{namespace="%s", pod=~"%s-.*"}[1m] offset %ds))/1024`
 	readQuery        = `sum(rate(container_fs_reads_bytes_total{namespace="%s", pod=~"%s-.*", container!="POD"}[100s]))`
 	writeQuery       = `sum(rate(container_fs_writes_bytes_total{namespace='%s', pod=~'%s-.*', container!='POD'}[100s]))`
 )
@@ -33,8 +31,7 @@ type Data struct {
 	} `json:"data"`
 }
 
-// 查询qps
-func GetQps(appName, namespace string, query string) []float64 {
+func GetQuery(appName, namespace, query string) float64 {
 	// 构造查询参数
 	queryParams := url.Values{}
 	queryParams.Add("query", fmt.Sprintf(query, namespace, appName))
@@ -43,151 +40,81 @@ func GetQps(appName, namespace string, query string) []float64 {
 	baseURL := config.PrometheusUrl + "/api/v1/query"
 	url := baseURL + "?" + queryParams.Encode()
 
-	fmt.Println(url)
-	// 存储查询结果的数组
-	results := make([]float64, 0, 4)
+	resp, err := http.Get(url)
+	if err != nil {
+		mylog.Logger.Errorf("获取资源有误:%s", err)
+	}
+	defer resp.Body.Close()
 
-	// 查询 5 次
-	for i := 0; i < 4; i++ {
-		resp, err := http.Get(url)
-		if err != nil {
-			logrus.Errorf("Request error for %s (attempt %d): %v\n", appName, i+1, err)
-			continue
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			logrus.Errorf("Unexpected status code for %s (attempt %d): %d\n", appName, i+1, resp.StatusCode)
-			body, _ := ioutil.ReadAll(resp.Body)
-			fmt.Println(string(body))
-			continue
-		}
-
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			logrus.Errorf("Failed to read response body for %s (attempt %d): %v\n", appName, i+1, err)
-			continue
-		}
-
-		var qpsData Data
-		if err := json.Unmarshal(body, &qpsData); err != nil {
-			logrus.Errorf("Failed to parse JSON response for %s (attempt %d): %v\n", appName, i+1, err)
-			continue
-		}
-
-		if len(qpsData.Data.Result) == 0 {
-			logrus.Warnf("No data found for %s in namespace %s.\n", appName, namespace)
-			results = append(results, 0.0)
-			continue
-		}
-
-		qpsValues := make([]float64, 0, len(qpsData.Data.Result))
-
-		for _, result := range qpsData.Data.Result {
-			if len(result.Value) == 2 {
-				if qpsValue, ok := result.Value[1].(string); ok {
-					qps, _ := strconv.ParseFloat(qpsValue, 64)
-					qpsValues = append(qpsValues, qps)
-				}
-			}
-		}
-
-		if len(qpsValues) == 0 {
-			logrus.Warnf("No valid data for %s.\n", appName)
-			results = append(results, 0.0)
-		} else {
-			// 计算平均值
-			totalQPS := 0.0
-			for _, value := range qpsValues {
-				totalQPS += value
-			}
-			averageQPS := totalQPS / float64(len(qpsValues))
-			results = append(results, averageQPS)
-		}
-
-		time.Sleep(15 * time.Second)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		mylog.Logger.Errorf("解析有误:%s", err)
 	}
 
-	if len(results) == 0 {
-		return nil
+	var data Data
+	err = json.Unmarshal(body, &data)
+	if err != nil {
+		mylog.Logger.Errorf("反序列化有误:%s", err)
 	}
 
-	return results
+	if len(data.Data.Result) > 0 {
+		s := data.Data.Result[0].Value[1].(string)
+		a, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			fmt.Println("获取指标有误:", err)
+		}
+		fmt.Printf("获取到的指标:%v\n", a)
+		return a
+	}
+
+	return -1
 }
 
-// 从普罗米修斯接口获取其他数据
-func getQuery(appName, namespace string, Query string) float64 {
-	// 构造查询参数
-	query := url.Values{}
-	query.Add("query", fmt.Sprintf(Query, namespace, appName))
+// 获取普罗米修斯的历史数据
+func getHistoryMetrics(query, appName, namespace string, duration int, step int) []float64 {
+	if duration%step != 0 {
+		panic("参数非法")
+	}
 
-	// 构造完整的 URL
-	baseURL := config.PrometheusUrl + "/api/v1/query"
-	url := baseURL + "?" + query.Encode()
+	result := make([]float64, 0, duration/step)
 
-	//最多发送三次请求
-	for attempt := 0; attempt < 3; attempt++ {
+	for i := step; i < duration; i += step {
+		queryParams := url.Values{}
+		queryParams.Add("query", fmt.Sprintf(query, namespace, appName, i))
+		baseURL := config.PrometheusUrl + "/api/v1/query"
+		url := baseURL + "?" + queryParams.Encode()
+
+		//fmt.Println(url)
+
 		resp, err := http.Get(url)
 		if err != nil {
-			mylog.Logger.Errorf("Request error for %s (attempt %d): %v\n", appName, attempt+1, err)
-			time.Sleep(2 * time.Second)
-			continue
+			mylog.Logger.Errorf("获取资源有误:%s", err)
 		}
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			mylog.Logger.Errorf("Unexpected status code for %s (attempt %d): %d\n", appName, attempt+1, resp.StatusCode)
-			body, _ := ioutil.ReadAll(resp.Body)
-			fmt.Println(string(body))
-			time.Sleep(2 * time.Second)
-			continue
-		}
-
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			mylog.Logger.Errorf("Failed to read response body for %s (attempt %d): %v\n", appName, attempt+1, err)
-			time.Sleep(2 * time.Second)
-			continue
+			mylog.Logger.Errorf("解析有误:%s", err)
 		}
 
-		var qpsData Data
-		if err := json.Unmarshal(body, &qpsData); err != nil {
-			mylog.Logger.Errorf("Failed to parse JSON response for %s (attempt %d): %v\n", appName, attempt+1, err)
-			time.Sleep(2 * time.Second)
-			continue
+		var data Data
+		err = json.Unmarshal(body, &data)
+		if err != nil {
+			mylog.Logger.Errorf("反序列化有误:%s", err)
 		}
 
-		if len(qpsData.Data.Result) == 0 {
-			mylog.Logger.Warnf("No data found for %s in namespace %s.\n", appName, namespace)
-		}
-
-		qpsValues := make([]float64, 0, len(qpsData.Data.Result))
-
-		for _, result := range qpsData.Data.Result {
-			if len(result.Value) == 2 {
-				if qpsValue, ok := result.Value[1].(string); ok {
-					qps, _ := strconv.ParseFloat(qpsValue, 64)
-					qpsValues = append(qpsValues, qps)
-				}
-
+		//获取信息
+		if len(data.Data.Result) > 0 {
+			s := data.Data.Result[0].Value[1].(string)
+			a, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				fmt.Println("获取指标有误:", err)
 			}
+			fmt.Printf("时间:%v之前获取到的指标:%v\n", i, a)
+			result = append(result, a)
 		}
 
-		if len(qpsValues) == 0 {
-			mylog.Logger.Warnf("No valid CPU data for %s.\n", appName)
-			return 0
-		}
-
-		// 计算平均值
-		totalQPS := 0.0
-		for _, value := range qpsValues {
-			totalQPS += value
-		}
-
-		averageQPS := totalQPS / float64(len(qpsValues))
-		return averageQPS
 	}
 
-	mylog.Logger.Errorf("Failed to fetch QPS usage for %s after 3 attempts.\n", appName)
-	return 0
+	return result
 }

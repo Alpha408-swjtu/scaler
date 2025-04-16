@@ -56,11 +56,11 @@ func NewHpa(client *kubernetes.Clientset, namespace, appName string) *Hpa {
 			AppName:   appName,
 		},
 		Standard: Standards{
-			QPS:         getQuery(appName, namespace, qpsQuery),
-			Recived:     getQuery(appName, namespace, receivedQuery),
-			Transmitted: getQuery(appName, namespace, TransmittedQuery),
-			ReadIops:    getQuery(appName, namespace, readQuery),
-			WriteIops:   getQuery(appName, namespace, writeQuery),
+			QPS:         GetQuery(appName, namespace, QpsQuery),
+			Recived:     GetQuery(appName, namespace, receivedQuery),
+			Transmitted: GetQuery(appName, namespace, TransmittedQuery),
+			ReadIops:    GetQuery(appName, namespace, readQuery),
+			WriteIops:   GetQuery(appName, namespace, writeQuery),
 		},
 	}
 }

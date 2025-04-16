@@ -6,7 +6,6 @@ import (
 )
 
 func TestHpa(t *testing.T) {
-	s := GetQps("frontend", "boutique", TransmittedQuery)
-
+	s := getHistoryMetrics(TransmittedQuery, "frontend", "boutique", 60, 1)
 	fmt.Println(s)
 }

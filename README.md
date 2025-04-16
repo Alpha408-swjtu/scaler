@@ -86,7 +86,19 @@ func calculateDynamicThreshold(fx, historicalAvg, loadGrowthRate float64) (float
 
 ​         通过二次移动平均法预测未来资源需求，动态下调扩容阈值 *T*expansion，在预测间隔期（默认 60 秒）内，当负载达到 *T*expansion 时提前创建新 Pod，避免突发流量导致的服务质量下降。
 
+#### 疑点
 
+1.
+
+![07](D:./images/07.png)
+
+​                                                      集群默认策略为什么会滞后这么多?滞后时间近似俩小时，若真是这样那意义何在?
+
+
+
+2. ![08](./images/08.png)
+
+​                                                  metrics-server默认的指标采集频率15s，1s抓取一次数据，太频繁，数据重复，prometheus压力过大
 
 ## 后续待解决
 

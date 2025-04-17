@@ -119,7 +119,7 @@ func main() {
 }
 ```
 
-![09](D:\01upgrade\scaler\images\09.png)
+![09](./images/09.png)
 
 #### 3.动态阈值调整
 

@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"scaler/config"
-	"scaler/hpa"
+	"scaler/file"
+	hpaAlgorithm "scaler/hpa/hpa_algorithm"
 	"time"
 )
 
@@ -52,16 +53,12 @@ func clearDir() {
 }
 
 func main() {
-	timer := time.After(59 * time.Second)
-	fmt.Println(time.Now())
-	s := hpa.GetHistoryMetrics(hpa.TransmittedQuery, "frontend", "boutique", 60, 1)
-	fmt.Printf("原始时间序列为：%v\n", s)
+	data := file.ReadFile("real")
+	single := hpaAlgorithm.SingleExpSmoothing(data, 0.2)
+	triple := hpaAlgorithm.TripleExponentialSmoothing(data, 0.2)
+	double := hpaAlgorithm.DoubleMovingAverage(data)
 
-	a := hpa.PreditLoad(s, 60)
-	fmt.Printf("预测1m后的负载为:%v\n", a)
-
-	<-timer
-	f := hpa.GetQuery("frontend", "boutique", hpa.CurrentTransmittedQuery)
-	fmt.Printf("一分钟后的实际负载是:%v", f)
-
+	file.SaveFile(double, "double_avg_smoothing")
+	file.SaveFile(single, "single_exp_smoothing")
+	file.SaveFile(triple, "triple_exp_smoothing")
 }
